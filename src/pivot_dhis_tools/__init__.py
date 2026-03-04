@@ -4,4 +4,4 @@ from . import get_dataElements
 from . import post_dataElements
 from . import launch_analytics
 
-import pridec
+from . import pridec
