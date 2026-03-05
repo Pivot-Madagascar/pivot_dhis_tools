@@ -5,8 +5,11 @@ from datetime import datetime
 import string
 import random
 
+import logging
+logger = logging.getLogger(__name__)
+
 def update_dataStoreKey(dhis_url, user=None, pwd=None, token=None, 
-                      dryRun=False, verbose=True):
+                      dryRun=False):
     """
     POST dataElement values to a dhis2 instance based on the `code` scheme
 
@@ -18,8 +21,6 @@ def update_dataStoreKey(dhis_url, user=None, pwd=None, token=None,
                                  Can be provided instead of user and pwd.
         dryRun (boolean)         True: test a dry run of the POST
                                  False (default): actually post the data 
-        verbose (boolean)       True (default): return response message
-                                False: return response code
     
     Returns:
         requests.Response: Response object from POST request
@@ -33,7 +34,7 @@ def update_dataStoreKey(dhis_url, user=None, pwd=None, token=None,
     auth = None if token else HTTPBasicAuth(user, pwd)
 
     if dryRun:
-        print("Conducting a dryRun. dataStore key will not be updated.")
+        logger.info("Conducting a dryRun. dataStore key will not be updated.")
 
     #Create key
     rand_str = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
@@ -52,14 +53,11 @@ def update_dataStoreKey(dhis_url, user=None, pwd=None, token=None,
         json = json_key
     )
 
-    if verbose:
-        resp_text = response.json().get("response") #for debugging
-        print(resp_text)
-
     if resp.ok:
-        print(f"Successfully updated dataStore key to {this_key['pridec_update']}")
+        logger.info("Successfully updated dataStore key to %s", this_key['pridec_update'])
+        logger.debug("Response: %s ", resp.text)
     else:
-        print(f"Failed to update dataStore key with status code {resp.status_code}")
-        print("Response:", resp.text)
+        logger.error("Failed to update dataStore key with status code %s",  str(resp.status_code))
+        logger.error("Response: %s", resp.text)
 
     return resp
