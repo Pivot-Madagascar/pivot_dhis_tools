@@ -70,7 +70,7 @@ def fetch_climate(dhis_url: str, ou_level: int, ou_parent: str,
         de_code = element["code"]
 
         analytics_url = (
-            f"{dhis_url}api/analytics.json"
+            f"{dhis_url}/api/analytics.json"
             f"?dimension=dx:{de_uid}"
             f"&dimension=ou:{orgUnits}"
             f"&dimension={periods}"
