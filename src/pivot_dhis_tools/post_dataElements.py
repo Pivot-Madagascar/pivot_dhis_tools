@@ -1,8 +1,12 @@
 import requests
 from requests.auth import HTTPBasicAuth
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 def post_dataElements(dhis_url, payload, user=None, pwd=None, token=None, 
-                      dryRun=False, verbose=True):
+                      dryRun=False):
     """
     POST dataElement values to a dhis2 instance based on the `code` scheme
 
@@ -17,8 +21,6 @@ def post_dataElements(dhis_url, payload, user=None, pwd=None, token=None,
                                  Can be provided instead of user and pwd.
         dryRun (boolean)         True: test a dry run of the POST
                                  False (default): actually post the data 
-        verbose (boolean)       True (default): return response message
-                                False: return response code
     
     Returns:
         requests.Response: Response object from POST request
@@ -54,8 +56,11 @@ def post_dataElements(dhis_url, payload, user=None, pwd=None, token=None,
     # resp.json().get("message")
     
 
-    if verbose:
-        resp_text = response.json().get("response") #for debugging
-        print(resp_text)
+    if response.ok:
+        logger.info("dataElements imported")
+        logger.debug("Response: %s", response.text)
+    else:
+        logger.error("Failed to import dataElements")
+        logger.error("Response: %s", response.text)
     
     return response

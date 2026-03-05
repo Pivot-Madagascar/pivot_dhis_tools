@@ -2,6 +2,9 @@ import requests
 from requests.auth import HTTPBasicAuth
 import pandas as pd
 
+import logging
+logger = logging.getLogger(__name__)
+
 def get_dataElements(dhis_url, dx_query, ou_query, pe_query, 
                      user=None, pwd=None, token=None, co_query=None, includeNumDen=False):
     """
@@ -38,6 +41,8 @@ def get_dataElements(dhis_url, dx_query, ou_query, pe_query,
 
 
     response = requests.get(api_url, params=params, headers=headers, auth=auth)
+
+    logger.debug("Response: %s", response.text)
     response.raise_for_status() 
 
     data_df = json_to_dataframe(response.json())
