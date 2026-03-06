@@ -44,7 +44,7 @@ def update_dataStoreKey(dhis_url, user=None, pwd=None, token=None,
     json_key = json.dumps(this_key)
 
     endpoint = "/api/33/dataStore/pridec/pridec_update"
-    url = f"{dhis_url.rstrip('/')}/{endpoint}"
+    url = f"{dhis_url.rstrip('/')}{endpoint}"
 
     resp = requests.put(
         url,

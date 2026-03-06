@@ -6,7 +6,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 def post_dataElements(dhis_url, payload, user=None, pwd=None, token=None, 
-                      dryRun=False):
+                      dryRun=True):
     """
     POST dataElement values to a dhis2 instance based on the `code` scheme
 
@@ -19,20 +19,21 @@ def post_dataElements(dhis_url, payload, user=None, pwd=None, token=None,
         pwd (str, optional)      password for dhis2 instance
         token (str, optional)    personal access token for dhis2 instance.
                                  Can be provided instead of user and pwd.
-        dryRun (boolean)         True: test a dry run of the POST
-                                 False (default): actually post the data 
+        dryRun (boolean)         True (default): test a dry run of the POST
+                                 False : actually post the data 
     
     Returns:
         requests.Response: Response object from POST request
     """
     if not token and not (user and pwd):
-        raise ValueError("Authentication required: provide either a token or both user and pwd")
+        logger.error("Authentication required: provide either a token or both user and pwd")
+        raise SystemExit(1)
 
     if dryRun:
-        print("Conducting a dryRun of POST. Data will not be imported.")
+        logger.info("Conducting a dryRun of POST. Data will not be imported.")
 
     endpoint = (
-        "api/dataValueSets"
+        "/api/dataValueSets"
         f"?dryRun={'true' if dryRun else 'false'}"
         "&dataElementIdScheme=code"
         "&orgUnitIdScheme=uid"
@@ -42,7 +43,7 @@ def post_dataElements(dhis_url, payload, user=None, pwd=None, token=None,
     )
 
 
-    url = f"{dhis_url.rstrip('/')}/{endpoint}"
+    url = f"{dhis_url.rstrip('/')}{endpoint}"
 
     # Authentication setup
     headers = {'Authorization': f'ApiToken {token}'} if token else {}

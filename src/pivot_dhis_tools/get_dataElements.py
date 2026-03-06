@@ -42,7 +42,7 @@ def get_dataElements(dhis_url, dx_query, ou_query, pe_query,
 
     response = requests.get(api_url, params=params, headers=headers, auth=auth)
 
-    logger.debug("Response: %s", response.text)
+    logger.debug("Response Reason: %s", response.reason)
     response.raise_for_status() 
 
     data_df = json_to_dataframe(response.json())

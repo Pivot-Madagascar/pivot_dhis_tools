@@ -1,7 +1,10 @@
 import requests
 from requests.auth import HTTPBasicAuth
 
-def launch_analytics(dhis_url, user=None, pwd=None, token=None,  verbose=True):
+import logging
+logger = logging.getLogger(__name__)
+
+def launch_analytics(dhis_url, user=None, pwd=None, token=None):
     """
     Launches Analytics Tables on a dhis2 instance
 
@@ -11,8 +14,6 @@ def launch_analytics(dhis_url, user=None, pwd=None, token=None,  verbose=True):
         pwd (str, optional)      password for dhis2 instance
         token (str, optional)    personal access token for dhis2 instance.
                                  Can be provided instead of user and pwd.
-        verbose (boolean)       True (default): return response message
-                                False: return response code
     
     Returns:
         requests.Response: Response object from POST request
@@ -37,13 +38,14 @@ def launch_analytics(dhis_url, user=None, pwd=None, token=None,  verbose=True):
     # resp.json().get("message")
     # resp_text = response.json().get("response") #for debugging
 
+    resp_text = response.json().get("response")
+
     if response.ok:
         analytics_endpoint = response.json().get("response")['relativeNotifierEndpoint']
-        print(f"Successfully launched export of analytics table.")
-        print(f"View status at {dhis_url.rstrip('/')}{analytics_endpoint}")
-
-    if verbose:
-        resp_text = response.json().get("response") #for debugging
-        print(resp_text)
+        logger.info("Successfully launched export of analytics table.")
+        logger.info("View status at %s", f"{dhis_url.rstrip('/')}{analytics_endpoint}")
+        logger.debug("Response: %s", resp_text)
+    else:
+        logger.error("Analytics table build failed to start with response: %s", resp_text)
     
     return response
