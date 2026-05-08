@@ -1,0 +1,28 @@
+[build-system]
+build-backend = "uv_build"
+requires = ["uv_build>=0.10.7"]
+
+[project]
+name = 'pivot_dhis_tools'
+requires-python = ">=3.12"
+description = "Contains tools used by Pivot to interact with DHIS2"
+license = "GPL-3.0-or-later"
+authors = [
+    {name = "PRIDE-C Project", email = "pridec@pivotworks.org"},
+    {name = "Michelle Evans", email = "mv.evans.phd@gmail.com"}
+]
+maintainers = [
+    {name = "Michelle Evans", email = "mv.evans.phd@gmail.com"}
+]
+dependencies = [
+    "numpy>=2.4.2",
+    "pandas>=3.0.1",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+    "python-dateutil>=2.9.0.post0",
+    "requests>=2.32.5",
+    "setuptools>=82.0.0"
+]
+
+[project.urls]
+Repository = "https://github.com/Pivot-Madagascar/pivot_dhis_tools"

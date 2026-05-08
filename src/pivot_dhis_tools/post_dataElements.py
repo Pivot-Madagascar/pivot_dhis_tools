@@ -5,22 +5,25 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def post_dataElements(dhis_url, payload, user=None, pwd=None, token=None, 
-                      dryRun=True):
+def post_dataElements(dhis_url: str,
+                      payload: dict,
+                      user:str | None = None, 
+                      pwd:str | None = None, 
+                      token: str | None = None, 
+                      dryRun: bool = True):
     """
     POST dataElement values to a dhis2 instance based on the `code` scheme
 
     Args:
-        dhis_url (str)           url of dhis2 isntance
-        payload (dict)           JSON payload of climate data to send in POST. 
-                                 Each item hould contain `orgUnit`, `period`, `code`, `value.
-                                 orgUnits shoudl be identified by their `uid`.
-        user (str, optional)     username for dhis2 instance
-        pwd (str, optional)      password for dhis2 instance
-        token (str, optional)    personal access token for dhis2 instance.
-                                 Can be provided instead of user and pwd.
-        dryRun (boolean)         True (default): test a dry run of the POST
-                                 False : actually post the data 
+        dhis_url: URL of the DHIS2 instance.
+        payload: JSON payload of dataElement values to send. Each item should contain `orgUnit`, `period`, `code`, `value`.
+                                 orgUnits should be identified by their `uid`.
+        user: Username for the DHIS2 instance. Required if `token` is not provided.
+        pwd: Password for the DHIS2 instance. Required if `token` is not provided.
+        token: Personal access token for the DHIS2 instance. Can be provided
+            instead of `user` and `pwd`.
+        dryRun: If True, performs a dry run without actually posting data.
+            If False, executes the POST request.
     
     Returns:
         requests.Response: Response object from POST request
@@ -51,6 +54,7 @@ def post_dataElements(dhis_url, payload, user=None, pwd=None, token=None,
     
     #send request
     response = requests.post(url, headers=headers, auth=auth, json=payload)
+    response.raise_for_status()
 
     # resp.json().get("httpStatus")
     # resp.json().get("status")
