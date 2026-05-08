@@ -20,6 +20,9 @@ Working on fixing an issue with `calc_CSB_alerts` described in this github issue
 
 I added checks for empty dataFrames. I also need to actually write the pyproject file so that I can set the version of dependencies required.
 
+**TO DO:**
+- use `uv` and update pyproject file
+
 ## 2026-3-04
 
 Added a bunch of functions that can be called by the PRIDE-C docker to help with centralizing code. I am leaving the import Pivot stuff there though because it si a bit of a pain to write as a function. Will maybe do so later.
