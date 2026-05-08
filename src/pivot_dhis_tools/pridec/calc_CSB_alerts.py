@@ -64,6 +64,9 @@ def calc_CSB_alerts(dhis_url: str, token: str = None, user: str = None, pwd: str
     forecast_data = get_dataElements(dhis_url = dhis_url, dx_query = f"dx:{';'.join(de_key['dx'][3:6])}",
                                 ou_query= "ou:LEVEL-5;VtP4BdCeXIo", pe_query=current_period_yyyymm,
                                 token = token)
+    if forecast_data.empty:
+        raise ValueError(f"No forecasts exist for the period query {current_period_yyyymm}. Cannot estimate 'CSB en Vigilance'.\nPlease update the focal_date argument of the calc_CSB_alerts function and ensure the forecast exists on the DHIS2 instance.")
+
     forecast_data["value"] = pd.to_numeric(forecast_data["value"], errors="coerce")
 
     #get data for historical period
@@ -76,6 +79,8 @@ def calc_CSB_alerts(dhis_url: str, token: str = None, user: str = None, pwd: str
                                 ou_query= "ou:LEVEL-5;VtP4BdCeXIo", pe_query=hist_period_yyyymm,
                                 token = token)
     hist_data["value"] = pd.to_numeric(hist_data["value"], errors="coerce")
+    if hist_data.empty:
+        raise ValueError(f"Historical data missing for the following dates:\n {hist_period_yyyymm}")
 
     #compare periods and count CSB with higher forecasts per disease
     hist_mean = hist_data.groupby(["ou", "dx"])["value"].mean().reset_index(name="hist_mean")
