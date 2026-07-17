@@ -47,7 +47,7 @@ def get_dataElement_names(dhis_url: str,
         }
     else:
         params = {
-            "fields": "id,name",
+            "fields": "id,name,code",
             "filter": f"name:ilike:{pattern}",
             "paging": "false",
         }
