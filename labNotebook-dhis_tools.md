@@ -25,6 +25,14 @@ git push origin vX.X.X
 #manually add relase on github
 ```
 
+## 2026-07-17
+
+Working on the calculate alerts function. I've turned it into a calc_orgUnit_alerts function that works on local data and can also fetch. This is basically done. Some tests are written for it, but need to be finalized
+
+## 2026-07-08
+
+To avoid rebuilding the analytics table all the time, we want to add the option for the calc_CSB_alerts to use locally available data, like from the inputs folder. See issue here: 
+
 ## 2026-06-08
 
 I had updated the package to clear the analytics table before it gets built and it was causing errors. Now have moved to its own function and added a raise for status check.
