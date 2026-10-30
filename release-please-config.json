@@ -3,7 +3,8 @@
   "packages": {
     ".": {
       "release-type": "python",
-      "package-name": "pivot_dhis_tools"
+      "package-name": "pivot_dhis_tools",
+      "bootstrap-sha": "979eec337052ea67ccdba43d0a4fac7abfbf3a00"
     }
   }
 }
