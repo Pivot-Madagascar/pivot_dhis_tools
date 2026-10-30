@@ -13,3 +13,4 @@ from .pridec.fetch_pridec_climate import fetch_climate as pridec_fetch_climate
 from .pridec.fetch_pridec_disease import fetch_disease as pridec_fetch_disease
 from .pridec.calc_CSB_alerts import calc_CSB_alerts as pridec_calc_CSB_alerts
 from .pridec.calc_orgUnit_alerts import calc_orgUnit_alerts as pridec_calc_orgUnit_alerts
+from .pridec.import_pivot import import_pivot_com, import_pivot_csb
