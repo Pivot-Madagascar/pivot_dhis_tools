@@ -21,6 +21,9 @@ def check_dhis_value(df):
 
 def check_import_value(df, max_threshold: int):
     this_value = df['value']
+
+    if this_value.empty:
+        raise ValueError("Potential errors in data to be imported: no values to import (data is empty).")
     
     err_1 = this_value.isna().sum()
     err_2 = (this_value > max_threshold).sum()
@@ -31,7 +34,7 @@ def check_import_value(df, max_threshold: int):
     problems = []
     if err_1 > 0:
         problems.append(f"{err_1} missing (NA) values")
-    if err_2 >0:
+    if err_2 > 0:
         problems.append(f"{err_2} orgUnits exceed case threshold of {max_threshold}")
     if err_3 > 0:
         problems.append(f"{err_3} negative values")
