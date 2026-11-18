@@ -75,3 +75,50 @@ def test_skips_are_logged(mocked, monkeypatch, caplog):
     assert any("pridec_historic_CSBMalaria: 2 source rows" in m for m in msgs)  # NaN dropped, one per fetch
     assert any("Skipping import of pridec_historic_CSBMalaria: no values left" in m for m in msgs)
     assert any("Skipping import of pridec_historic_CSBRespinf: failed the value check" in m for m in msgs)
+
+
+# ---------------- fetch_pivot_csb_etlhub ----------------
+
+def _fetch():
+    return mod.fetch_pivot_csb_etlhub(pivot_token="p", pivot_url="pu")
+
+
+def test_etlhub_returns_one_item_per_element_without_posting(mocked):
+    out = _fetch()
+
+    assert mocked == []  # nothing posted
+    assert [i["dataElement"] for i in out] == list(mod.CSB_ELEMENTS)
+    vals = {i["dataElement"]: {r["orgUnit"]: r["value"] for r in i["fetched_data"]} for i in out}
+    assert vals["pridec_historic_CSBMalaria"] == {"A": 7}
+    assert vals["pridec_historic_CSBRespinf"] == {"A": 7, "B": 1}
+    assert vals["pridec_historic_CSBDiarrhea"] == {"A": 7, "B": 1}
+
+
+def test_etlhub_output_is_json_serialisable(mocked):
+    import json
+    json.dumps(_fetch())
+
+
+def test_etlhub_passing_check_is_not_flagged(mocked):
+    for item in _fetch():
+        assert item["summary"]["flagged"] is False
+        assert item["summary"]["error"] is None
+        assert item["summary"]["text"].startswith("numNA: 0")
+
+
+def test_etlhub_failed_and_empty_checks_are_flagged(mocked, monkeypatch):
+    def fake_get(dhis_url, token, dx_query, pe_query, ou_query, includeNumDen, co_query=None):
+        if includeNumDen:  # malaria: only a missing numerator, so empty after dropping it
+            return pd.DataFrame([{"dx": "a", "ou": "A", "pe": "202601", "value": "0.5", "numerator": ""}])
+        return pd.DataFrame([{"dx": "x", "ou": "A", "pe": "202601", "co": "c", "value": "9999"}])
+
+    monkeypatch.setattr(mod, "get_dataElements", fake_get)
+    monkeypatch.setattr("builtins.input", lambda _p: pytest.fail("etlhub must not prompt"))
+    summaries = {i["dataElement"]: i["summary"] for i in _fetch()}
+
+    assert summaries["pridec_historic_CSBMalaria"]["flagged"] is True
+    assert "data is empty" in summaries["pridec_historic_CSBMalaria"]["error"]
+    for target in ("pridec_historic_CSBRespinf", "pridec_historic_CSBDiarrhea"):
+        assert summaries[target]["flagged"] is True
+        assert summaries[target]["text"] is None
+        assert "exceed case threshold of 500" in summaries[target]["error"]

@@ -11,10 +11,10 @@ from ..post_dataElements import post_dataElements
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["import_pivot_com", "import_pivot_csb"]
+__all__ = ["import_pivot_com", "import_pivot_csb", "fetch_pivot_com_etlhub", "fetch_pivot_csb_etlhub"]
 
 COM_MAX_THRESHOLD = 100  # maximum cases per fokontany and period
-CSB_MAX_THRESHOLD = 500
+CSB_MAX_THRESHOLD = 500  # maximum cases per CSB and month
 
 COM_ELEMENTS = {
     # target dataElement           : source dx ids in the Pivot instance
@@ -22,6 +22,47 @@ COM_ELEMENTS = {
     "pridec_historic_COMRespinf":  ["hJ5pa6wO4nJ", "CmDXCmmywrj"],   # hJ5pa6wO4nJ : RMA_COM_PCIMEc Nombre d’enfants présentant de pneumonie, CmDXCmmywrj : RMA_COM_PCIMEc Nombre d’enfants présentant de  toux ou rhume
     "pridec_historic_COMDiarrhea": ["DjsQEzPDAoN", "f4hrhsiz49l"],   #DjsQEzPDAoN : RMA_COM_PCIMEc Nombre d’enfants présentant de diarrhée avec signes de danger, f4hrhsiz49l : RMA_COM_PCIMEc Nombre d’enfants présentant de diarrhée simple
 }
+
+# the 21 Ifanadiana CSB orgUnits
+CSB_IDS = [
+    "D9UWDj19ljP", "U1YeJp3NDNV", "DDR2w1c1GyE", "uWoBok9YyvB",
+    "O1wNJut8eci", "FGM6Ric1YnC", "r4U7PhBKR7S", "RRe6ic0AU1Z",
+    "okDqhh9n4yT", "z6kDxHwInUT", "h0z1bKoHDrU", "Pi2y9HFBDRj",
+    "pczrAub8lnt", "YCvVB1VwWi0", "hXuxS0MOq3b", "mBZLeZ7Irx6",
+    "WCqkkkKNJEi", "EE6WwIMgQ0F", "M38BJM8ju1A", "ZPvH8UsgwYv",
+    "QHPyq70qulM"
+]
+
+CHILD_COC = "co:HIsTqXVmDdV;TJlRzxBqiqG;ncBrGeQ9w2g;YAxDQLsxeT0;fEAWzG9dj98;yprE1T7gBUw;lwrX7wJqjhW;DSaVQguA6v6"
+
+CSB_ELEMENTS = {
+    "pridec_historic_CSBMalaria": dict(
+        fetches=[dict(dx_query="dx:wuwA8DT9h7c", includeNumDen=True), # wuwA8DT9h7c (Numerator) - RDT + at CSB for 2-11 months
+                dict(dx_query="dx:PVu7GgpuJNV", includeNumDen=True)], # PVu7GgpuJNV (Numerator) - RDT + at CSB for 1-5 years
+        value_col="numerator"),
+    "pridec_historic_CSBRespinf": dict(
+        fetches=[dict(dx_query="dx:eHrqdPNZW6m;E4KUPwZuLrG", co_query=CHILD_COC, includeNumDen=False)],
+        value_col="value"),
+    "pridec_historic_CSBDiarrhea": dict(
+        fetches=[dict(dx_query="dx:uw5yUgtSYfQ;kvoIFhX5RMA;NG2mlKX2D6C", co_query=CHILD_COC, includeNumDen=False)],
+        value_col="value"),
+}
+
+
+def _check_summary(df, target, *, max_threshold, logger):
+    """Run `check_import_value` and return a summary dict instead of raising.
+
+    Returns:
+        dict with `text` (summary string or None), `flagged` (True if the check raised a
+        ValueError) and `error` (the ValueError message or None).
+    """
+    try:
+        check_text = check_import_value(df, max_threshold=max_threshold)
+        logger.info("%s has the following characteristics: %s", target, check_text)
+        return {"text": check_text, "flagged": False, "error": None}
+    except ValueError as e:
+        logger.warning("%s failed the import value check: %s", target, e)
+        return {"text": None, "flagged": True, "error": str(e)}
 
 
 def _check_and_post(df, target, *, max_threshold, dhis_url, dhis_token, dryRun, logger):
@@ -73,8 +114,11 @@ def _fetch_com_element(target, dx_ids, *, period_list, org_query, full_grid,
     if n_bad > 0:
         logger.warning("%s: %d source rows had a missing or non-numeric value and were ignored", target, n_bad)
 
+    # drop the bad rows before summing: an all-NaN group would otherwise sum to 0 and be
+    # imported as a real zero even where no consultations were reported
     df = (
         raw
+        .dropna(subset=['value'])
         .groupby(['period', 'orgUnit'], as_index=False)
         .agg(value=('value', 'sum'))
         .merge(full_grid, on=['orgUnit', 'period'], how="outer")
@@ -239,25 +283,17 @@ def fetch_pivot_com_etlhub(
                         logger=logger)
 
         # run data check; a failed check flags the element but does not stop the fetch
-        try:
-            check_text = check_import_value(fetched_df, max_threshold=COM_MAX_THRESHOLD)
-            logger.info("%s has the following characteristics: %s", target, check_text)
-            check_summary = {"text": check_text, "flagged": False, "error": None}
-        except ValueError as e:
-            logger.warning("%s failed the import value check: %s", target, e)
-            check_summary = {"text": None, "flagged": True, "error": str(e)}
-
         results.append({
             "dataElement": target,
             "fetched_data": fetched_df.to_dict(orient="records"),
-            "summary": check_summary,
+            "summary": _check_summary(fetched_df, target, max_threshold=COM_MAX_THRESHOLD, logger=logger),
         })
 
     return results
 
 
-def _import_csb_element(target, spec, *, period_list, org_query,
-                       pivot_url, pivot_token, dhis_url, dhis_token, dryRun, logger):
+def _fetch_csb_element(target, spec, *, period_list, org_query,
+                       pivot_url, pivot_token, logger):
     logger.info("Fetching %s", target)
     raw = pd.concat(
         [get_dataElements(dhis_url=pivot_url, token=pivot_token,
@@ -277,9 +313,19 @@ def _import_csb_element(target, spec, *, period_list, org_query,
              .agg(value=('v', 'sum'))
              .assign(dataElement=target, categoryOptionCombo='pridec_COC_u5')
              .assign(value=lambda x: pd.to_numeric(x['value'], errors='coerce', downcast='integer')))
+    return df
 
-    _check_and_post(df, target, max_threshold=500, dhis_url=dhis_url, dhis_token=dhis_token,
-                   dryRun=dryRun, logger=logger)
+
+def _prepare_csb(*, prior_months):
+    """Build the period list and orgUnit query shared by the CSB functions.
+
+    Returns:
+        Tuple of (period_list, csb_org_query).
+    """
+    period_list = create_period_range(start=(date.today() - relativedelta(months=prior_months)))
+    csb_org_query = f"ou:{';'.join(CSB_IDS)}"
+    return period_list, csb_org_query
+
 
 def import_pivot_csb(dhis_url: str,
                      dhis_token: str, 
@@ -327,39 +373,70 @@ def import_pivot_csb(dhis_url: str,
     else:
         logger.info("NORMAL RUN - Data will be imported into PRIDE-C instance")
 
-    period_list = create_period_range(start = (date.today()-relativedelta(months=prior_months)))
-
-    CHILD_COC = "co:HIsTqXVmDdV;TJlRzxBqiqG;ncBrGeQ9w2g;YAxDQLsxeT0;fEAWzG9dj98;yprE1T7gBUw;lwrX7wJqjhW;DSaVQguA6v6"
-
-    csb_ids = [
-        "D9UWDj19ljP", "U1YeJp3NDNV", "DDR2w1c1GyE", "uWoBok9YyvB",
-        "O1wNJut8eci", "FGM6Ric1YnC", "r4U7PhBKR7S", "RRe6ic0AU1Z",
-        "okDqhh9n4yT", "z6kDxHwInUT", "h0z1bKoHDrU", "Pi2y9HFBDRj",
-        "pczrAub8lnt", "YCvVB1VwWi0", "hXuxS0MOq3b", "mBZLeZ7Irx6",
-        "WCqkkkKNJEi", "EE6WwIMgQ0F", "M38BJM8ju1A", "ZPvH8UsgwYv",
-        "QHPyq70qulM"
-    ]
-    csb_org_query = f"ou:{';'.join(csb_ids)}"
-
     logger.info("Importing CSB cases for Ifanadiana")
 
-    CSB_ELEMENTS = {
-        "pridec_historic_CSBMalaria": dict(
-            fetches=[dict(dx_query="dx:wuwA8DT9h7c", includeNumDen=True), # wuwA8DT9h7c (Numerator) - RDT + at CSB for 2-11 months 
-                    dict(dx_query="dx:PVu7GgpuJNV", includeNumDen=True)], # PVu7GgpuJNV (Numerator) - RDT + at CSB for 1-5 years
-            value_col="numerator"),
-        "pridec_historic_CSBRespinf": dict(
-            fetches=[dict(dx_query="dx:eHrqdPNZW6m;E4KUPwZuLrG", co_query=CHILD_COC, includeNumDen=False)],
-            value_col="value"),
-        "pridec_historic_CSBDiarrhea": dict(
-            fetches=[dict(dx_query="dx:uw5yUgtSYfQ;kvoIFhX5RMA;NG2mlKX2D6C", co_query=CHILD_COC, includeNumDen=False)],
-            value_col="value"),
-    }     
+    period_list, csb_org_query = _prepare_csb(prior_months=prior_months)
+
+    for target, spec in CSB_ELEMENTS.items():
+        fetched_df = _fetch_csb_element(target, spec, period_list=period_list, org_query=csb_org_query,
+                        pivot_url=pivot_url, pivot_token=pivot_token, logger=logger)
+
+        _check_and_post(fetched_df, target, max_threshold=CSB_MAX_THRESHOLD, dhis_url=dhis_url,
+                        dhis_token=dhis_token, dryRun=dryRun, logger=logger)
 
 
-    for name, spec in CSB_ELEMENTS.items():
-        _import_csb_element(name, spec, period_list=period_list, org_query=csb_org_query,
-                        pivot_url=pivot_url, pivot_token=pivot_token,
-                        dhis_url=dhis_url, dhis_token=dhis_token, dryRun=dryRun, logger=logger)
+def fetch_pivot_csb_etlhub(
+                     pivot_token: str,
+                     pivot_url: str,
+                     prior_months: int = 8):
+    """
+    Fetch and check clinic (CSB) case counts from the Pivot instance, without importing.
+
+    Fetches data for the 21 Ifanadiana CSB orgUnits (hard coded) for the last
+    `prior_months` months for three dataElements: `pridec_historic_CSBMalaria`,
+    `pridec_historic_CSBRespinf` and `pridec_historic_CSBDiarrhea`.
+    Values are summed by orgUnit and period. Rows with a missing value are dropped,
+    and no zeroes are filled in for missing data.
+
+    Each element is checked with `check_import_value` (maximum 500 cases per CSB/month).
+    A failed check, including empty data, does not stop the fetch; it is recorded in
+    the summary.
+
+    Args:
+        pivot_token: Personal access token for the Pivot instance.
+        pivot_url: URL of the Pivot DHIS2 instance to read from.
+        prior_months: Number of months before today to start the period range.
+            The range runs up to, but excludes, the current month. Default = 8.
+
+    Returns:
+        List of dicts, one per CSB element. Each dict contains:
+            - dataElement: the target dataElement name
+            - fetched_data: the fetched data as a list of records (dicts)
+            - summary: dict with
+                - text: the `check_import_value` summary string, or None if the check failed
+                - flagged: True if `check_import_value` raised a ValueError
+                - error: the ValueError message if flagged, otherwise None
+    Raises:
+        requests.HTTPError: If a request to the Pivot instance fails.
+        ValueError: If `pivot_token` is empty, so no authentication is supplied.
+    """
+    logger.info("Fetching CSB cases for Ifanadiana")
+
+    period_list, csb_org_query = _prepare_csb(prior_months=prior_months)
+
+    results = []
+
+    for target, spec in CSB_ELEMENTS.items():
+        fetched_df = _fetch_csb_element(target, spec, period_list=period_list, org_query=csb_org_query,
+                        pivot_url=pivot_url, pivot_token=pivot_token, logger=logger)
+
+        # run data check; a failed check flags the element but does not stop the fetch
+        results.append({
+            "dataElement": target,
+            "fetched_data": fetched_df.to_dict(orient="records"),
+            "summary": _check_summary(fetched_df, target, max_threshold=CSB_MAX_THRESHOLD, logger=logger),
+        })
+
+    return results
 
 
