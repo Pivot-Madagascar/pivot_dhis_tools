@@ -186,3 +186,68 @@ def test_live_dry_run(monkeypatch):
         # data returned ignored values with no conflicts), so log it instead of failing
         assert sum(counts[k] for k in ("imported", "updated", "ignored")) == len(values)
         logger.info("%s: %s", values[0]["dataElement"], counts)
+
+
+# ---------------- fetch_pivot_com_etlhub ----------------
+
+def _fetch():
+    return mod.fetch_pivot_com_etlhub(pivot_token="pivot-tok", pivot_url="https://pivot.test")
+
+
+def test_etlhub_returns_one_item_per_element_without_posting(mocked):
+    out = _fetch()
+
+    assert mocked == []  # nothing posted
+    assert [i["dataElement"] for i in out] == list(mod.COM_ELEMENTS)
+    vals = {i["dataElement"]: {r["orgUnit"]: r["value"] for r in i["fetched_data"]} for i in out}
+    assert vals["pridec_historic_COMMalaria"] == {"A": 5, "B": 0}
+    assert vals["pridec_historic_COMRespinf"] == {"A": 5, "B": 1}
+    assert vals["pridec_historic_COMDiarrhea"] == {"A": 4, "B": 0}
+
+
+def test_etlhub_output_is_json_serialisable(mocked):
+    import json
+    json.dumps(_fetch())
+
+
+def test_etlhub_passing_check_is_not_flagged(mocked):
+    for item in _fetch():
+        s = item["summary"]
+        assert s["flagged"] is False
+        assert s["error"] is None
+        assert s["text"].startswith("numNA: 0")
+
+
+def test_etlhub_failed_check_is_flagged_and_does_not_stop_others(mocked, pivot_data):
+    pivot_data["dx:vduU8d1GZbW"] = [_rows("vduU8d1GZbW", "A", "999")]  # over the threshold of 100
+
+    summaries = {i["dataElement"]: i["summary"] for i in _fetch()}
+    malaria = summaries["pridec_historic_COMMalaria"]
+    assert malaria["flagged"] is True
+    assert "maximum value: 999" in malaria["text"]
+    assert "exceed case threshold of 100" in malaria["error"]
+    assert summaries["pridec_historic_COMRespinf"]["flagged"] is False
+    assert summaries["pridec_historic_COMDiarrhea"]["flagged"] is False
+
+
+def test_etlhub_empty_data_is_flagged(mocked, pivot_data):
+    pivot_data[TOTAL_DX] = [_rows("lq38tLcfEi7", "A", "")]  # no consultations
+    for dx in ("dx:vduU8d1GZbW", "dx:hJ5pa6wO4nJ;CmDXCmmywrj", "dx:DjsQEzPDAoN;f4hrhsiz49l"):
+        pivot_data[dx] = pd.DataFrame(columns=["dx", "ou", "pe", "value"])  # no source rows
+
+    for item in _fetch():
+        assert item["fetched_data"] == []
+        assert item["summary"]["flagged"] is True
+        assert "data is empty" in item["summary"]["error"]
+        assert item["summary"]["text"].endswith("number of values: 0")
+
+
+def test_non_numeric_source_value_is_not_turned_into_a_zero(mocked, pivot_data):
+    # A reported consultations, B did not; both have only a blank malaria value
+    pivot_data[TOTAL_DX] = [_rows("lq38tLcfEi7", "A", "10"), _rows("lq38tLcfEi7", "B", "")]
+    pivot_data["dx:vduU8d1GZbW"] = [_rows("vduU8d1GZbW", "A", ""), _rows("vduU8d1GZbW", "B", "")]
+
+    _run()
+
+    malaria = _values_by_target(mocked)["pridec_historic_COMMalaria"]
+    assert malaria == {"A": 0}  # A: consultations but no valid value -> 0; B: no consultations -> not imported

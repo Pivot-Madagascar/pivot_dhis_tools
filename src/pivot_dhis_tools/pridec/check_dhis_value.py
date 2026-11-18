@@ -21,22 +21,27 @@ def check_dhis_value(df):
 
 def check_import_value(df, max_threshold: int):
     this_value = df['value']
-    
+
+    is_empty = this_value.empty
     err_1 = this_value.isna().sum()
     err_2 = (this_value > max_threshold).sum()
     err_3 = (this_value < 0).sum()
 
-    summary = f"numNA: {err_1} | minimum value: {this_value.min()} | maximum value: {this_value.max()} | negative values: {err_3}"
+    summary = f"numNA: {err_1} | minimum value: {this_value.min()} | maximum value: {this_value.max()} | negative values: {err_3} | number of values: {len(this_value)}"
 
     problems = []
+    if is_empty:
+        problems.append("no values to import (data is empty)")
     if err_1 > 0:
         problems.append(f"{err_1} missing (NA) values")
-    if err_2 >0:
+    if err_2 > 0:
         problems.append(f"{err_2} orgUnits exceed case threshold of {max_threshold}")
     if err_3 > 0:
         problems.append(f"{err_3} negative values")
 
     if problems:
-        raise ValueError(f"Potential errors in data to be imported: {'; '.join(problems)}. {summary}")
+        err = ValueError(f"Potential errors in data to be imported: {'; '.join(problems)}. {summary}")
+        err.summary = summary  # lets callers keep the summary text when the check fails
+        raise err
 
     return(summary)
