@@ -53,8 +53,9 @@ def _check_summary(df, target, *, max_threshold, logger):
     """Run `check_import_value` and return a summary dict instead of raising.
 
     Returns:
-        dict with `text` (summary string or None), `flagged` (True if the check raised a
-        ValueError) and `error` (the ValueError message or None).
+        dict with `text` (summary string, returned whether or not the check passes),
+        `flagged` (True if the check raised a ValueError) and `error`
+        (the ValueError message or None).
     """
     try:
         check_text = check_import_value(df, max_threshold=max_threshold)
@@ -62,7 +63,7 @@ def _check_summary(df, target, *, max_threshold, logger):
         return {"text": check_text, "flagged": False, "error": None}
     except ValueError as e:
         logger.warning("%s failed the import value check: %s", target, e)
-        return {"text": None, "flagged": True, "error": str(e)}
+        return {"text": getattr(e, "summary", None), "flagged": True, "error": str(e)}
 
 
 def _check_and_post(df, target, *, max_threshold, dhis_url, dhis_token, dryRun, logger):
@@ -262,7 +263,7 @@ def fetch_pivot_com_etlhub(
             - dataElement: the target dataElement name
             - fetched_data: the fetched data as a list of records (dicts)
             - summary: dict with
-                - text: the `check_import_value` summary string, or None if the check failed
+                - text: the `check_import_value` summary string, returned whether or not the check passes
                 - flagged: True if `check_import_value` raised a ValueError
                 - error: the ValueError message if flagged, otherwise None
     Raises:
@@ -413,7 +414,7 @@ def fetch_pivot_csb_etlhub(
             - dataElement: the target dataElement name
             - fetched_data: the fetched data as a list of records (dicts)
             - summary: dict with
-                - text: the `check_import_value` summary string, or None if the check failed
+                - text: the `check_import_value` summary string, returned whether or not the check passes
                 - flagged: True if `check_import_value` raised a ValueError
                 - error: the ValueError message if flagged, otherwise None
     Raises:

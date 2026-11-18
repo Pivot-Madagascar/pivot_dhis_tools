@@ -224,7 +224,7 @@ def test_etlhub_failed_check_is_flagged_and_does_not_stop_others(mocked, pivot_d
     summaries = {i["dataElement"]: i["summary"] for i in _fetch()}
     malaria = summaries["pridec_historic_COMMalaria"]
     assert malaria["flagged"] is True
-    assert malaria["text"] is None
+    assert "maximum value: 999" in malaria["text"]
     assert "exceed case threshold of 100" in malaria["error"]
     assert summaries["pridec_historic_COMRespinf"]["flagged"] is False
     assert summaries["pridec_historic_COMDiarrhea"]["flagged"] is False
@@ -239,6 +239,7 @@ def test_etlhub_empty_data_is_flagged(mocked, pivot_data):
         assert item["fetched_data"] == []
         assert item["summary"]["flagged"] is True
         assert "data is empty" in item["summary"]["error"]
+        assert item["summary"]["text"].endswith("number of values: 0")
 
 
 def test_non_numeric_source_value_is_not_turned_into_a_zero(mocked, pivot_data):
