@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/Pivot-Madagascar/pivot_dhis_tools/compare/v0.2.0...v0.3.0) (2026-11-18)
+
+
+### Features
+
+* migrate import_pivot functions for cli and etlhub into this package ([#5](https://github.com/Pivot-Madagascar/pivot_dhis_tools/issues/5)) ([bcee182](https://github.com/Pivot-Madagascar/pivot_dhis_tools/commit/bcee18251d68967243c0142d7810b3257cc649ed))
+
 ## [0.2.0](https://github.com/Pivot-Madagascar/pivot_dhis_tools/compare/pivot_dhis_tools-v0.1.2...pivot_dhis_tools-v0.2.0) (2026-10-30)
 
 
