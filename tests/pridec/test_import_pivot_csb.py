@@ -118,7 +118,9 @@ def test_etlhub_failed_and_empty_checks_are_flagged(mocked, monkeypatch):
 
     assert summaries["pridec_historic_CSBMalaria"]["flagged"] is True
     assert "data is empty" in summaries["pridec_historic_CSBMalaria"]["error"]
+    assert summaries["pridec_historic_CSBMalaria"]["text"].endswith("number of values: 0")
     for target in ("pridec_historic_CSBRespinf", "pridec_historic_CSBDiarrhea"):
         assert summaries[target]["flagged"] is True
-        assert summaries[target]["text"] is None
+        assert summaries[target]["text"].startswith("numNA: 0")
+        assert "maximum value: 9999" in summaries[target]["text"]
         assert "exceed case threshold of 500" in summaries[target]["error"]
