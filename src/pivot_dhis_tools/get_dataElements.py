@@ -33,7 +33,7 @@ def get_dataElements(dhis_url: str,
             instead of `user` and `pwd`.
         co_query: list of category options to download, seperated by;. Must start with `co:`. Optional.
         includeNumDen : whether to download the numerator and denominator of indicators. Default = False
-        id_scheme : sets the input and output id scheme of the DHIS2 API, e.g. "CODE" to supply/receive dataElement CODEs 
+        dx_id_scheme : sets the input and output id scheme of the DHIS2 API, e.g. "CODE" to supply/receive dataElement CODEs 
             instead of UIDs in dx_query and in the response columns.  Optional, default = None (DHIS2 default of UID).
             Other option is "ATTRIBUTE:<ID>".
 
