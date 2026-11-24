@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/Pivot-Madagascar/pivot_dhis_tools/compare/v0.3.0...v0.3.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* add ability to post dataElement via id scheme ([#18](https://github.com/Pivot-Madagascar/pivot_dhis_tools/issues/18)) ([c164474](https://github.com/Pivot-Madagascar/pivot_dhis_tools/commit/c1644745829bd09a61a82c6472401e9394d1c5f9))
+* import csb_malaria direct from dataElement ([#16](https://github.com/Pivot-Madagascar/pivot_dhis_tools/issues/16)) ([0e4a6ee](https://github.com/Pivot-Madagascar/pivot_dhis_tools/commit/0e4a6ee9e1635fbcf322a95c53de9de7241945d1))
+
 ## [0.3.0](https://github.com/Pivot-Madagascar/pivot_dhis_tools/compare/v0.2.0...v0.3.0) (2026-11-18)
 
 
