@@ -210,7 +210,7 @@ def import_pivot_com(dhis_url: str,
     Raises:
         requests.HTTPError: If a request to the Pivot instance fails.
         ValueError: If `pivot_token` is empty, so no authentication is supplied.
-        SystemExit: If `dhis_token` is empty, so the POST has no authentication.
+        ValueError: If `dhis_token` is empty, so the POST has no authentication.
     """
 
     if dryRun:
@@ -366,7 +366,7 @@ def import_pivot_csb(dhis_url: str,
     Raises:
         requests.HTTPError: If a request to the Pivot instance fails.
         ValueError: If `pivot_token` is empty, so no authentication is supplied.
-        SystemExit: If `dhis_token` is empty, so the POST has no authentication.
+        ValueError: If `dhis_token` is empty, so the POST has no authentication.
     """
 
     if dryRun:

@@ -10,7 +10,8 @@ def post_dataElements(dhis_url: str,
                       user:str | None = None, 
                       pwd:str | None = None, 
                       token: str | None = None, 
-                      dryRun: bool = True):
+                      dryRun: bool = True,
+                      dx_id_scheme: str = "code"):
     """
     POST dataElement values to a dhis2 instance based on the `code` scheme
 
@@ -24,13 +25,14 @@ def post_dataElements(dhis_url: str,
             instead of `user` and `pwd`.
         dryRun: If True, performs a dry run without actually posting data.
             If False, executes the POST request.
-    
+        dx_id_scheme: dataElementIdScheme and categoryOptionComboIdScheme to 
+            post to. Default = code.
+
     Returns:
         requests.Response: Response object from POST request
     """
     if not token and not (user and pwd):
-        logger.error("Authentication required: provide either a token or both user and pwd")
-        raise SystemExit(1)
+        raise ValueError("Authentication required: provide either a token or both user and pwd")
 
     if dryRun:
         logger.info("Conducting a dryRun of POST. Data will not be imported.")
@@ -38,9 +40,9 @@ def post_dataElements(dhis_url: str,
     endpoint = (
         "/api/dataValueSets"
         f"?dryRun={'true' if dryRun else 'false'}"
-        "&dataElementIdScheme=code"
+        f"&dataElementIdScheme={dx_id_scheme}"
         "&orgUnitIdScheme=uid"
-        "&categoryOptionComboIdScheme=code"
+        f"&categoryOptionComboIdScheme={dx_id_scheme}"
         "&idScheme=code"
         "&importStrategy=CREATE_AND_UPDATE"
     )
@@ -54,18 +56,17 @@ def post_dataElements(dhis_url: str,
     
     #send request
     response = requests.post(url, headers=headers, auth=auth, json=payload)
+
+    if not response.ok:
+        logger.error("Failed to import dataElements: HTTP %s %s", response.status_code, response.reason)
+        logger.error("Response: %s", response.text or "(empty body)")
     response.raise_for_status()
 
     # resp.json().get("httpStatus")
     # resp.json().get("status")
     # resp.json().get("message")
-    
 
-    if response.ok:
-        logger.info("dataElements imported")
-        logger.debug("Response: %s", response.text)
-    else:
-        logger.error("Failed to import dataElements")
-        logger.error("Response: %s", response.text)
-    
+    logger.info("dataElements imported")
+    logger.debug("Response: %s", response.text)
+
     return response
