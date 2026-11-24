@@ -156,8 +156,8 @@ def test_live_dry_run(monkeypatch):
 
     import_pivot_com(dhis_url=os.getenv("TEST_URL"),
                      dhis_token=os.getenv("TEST_TOKEN"),
-                     pivot_url=os.getenv("PIVOT_URL"),
-                     pivot_token=os.getenv("PIVOT_TOKEN"),
+                     pivot_url=os.getenv("TEST_URL"),
+                     pivot_token=os.getenv("TEST_TOKEN"),
                      dryRun=True,
                      prior_months=2)
 
