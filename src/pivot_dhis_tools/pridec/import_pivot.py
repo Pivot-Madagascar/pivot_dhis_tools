@@ -34,12 +34,12 @@ CSB_IDS = [
 ]
 
 CHILD_COC = "co:HIsTqXVmDdV;TJlRzxBqiqG;ncBrGeQ9w2g;YAxDQLsxeT0;fEAWzG9dj98;yprE1T7gBUw;lwrX7wJqjhW;DSaVQguA6v6"
+CSB_PALU_COC = "co:pS0pmI681Yp;S0U3TuqucZq;MB6T3efeKmP;E698IGlZ2Fb;OdfudkER8xl;j2IswYYaiIk"
 
 CSB_ELEMENTS = {
     "pridec_historic_CSBMalaria": dict(
-        fetches=[dict(dx_query="dx:wuwA8DT9h7c", includeNumDen=True), # wuwA8DT9h7c (Numerator) - RDT + at CSB for 2-11 months
-                dict(dx_query="dx:PVu7GgpuJNV", includeNumDen=True)], # PVu7GgpuJNV (Numerator) - RDT + at CSB for 1-5 years
-        value_col="numerator"),
+        fetches=[dict(dx_query="dx:NU6LJrW5OtP", co_query=CSB_PALU_COC, includeNumDen=False)], 
+        value_col="value"),
     "pridec_historic_CSBRespinf": dict(
         fetches=[dict(dx_query="dx:eHrqdPNZW6m;E4KUPwZuLrG", co_query=CHILD_COC, includeNumDen=False)],
         value_col="value"),
