@@ -62,8 +62,8 @@ def captured(monkeypatch):
     """Replace requests.post with a fake; return the list of captured calls."""
     calls = []
 
-    def fake_post(url, headers=None, auth=None, json=None):
-        calls.append({"url": url, "headers": headers, "auth": auth, "json": json})
+    def fake_post(url, headers=None, auth=None, json=None, timeout=None):
+        calls.append({"url": url, "headers": headers, "auth": auth, "json": json, "timeout": timeout})
         return _response()
 
     monkeypatch.setattr(mod.requests, "post", fake_post)
