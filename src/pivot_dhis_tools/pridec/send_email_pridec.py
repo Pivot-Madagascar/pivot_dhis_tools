@@ -47,7 +47,8 @@ def send_email_pridec(subject: str,
         f"{dhis_url}/api/33/userGroups",
         headers = headers,
         auth = auth,
-        params = {"filter": "name:eq:PRIDE-C", "fields": "users[email]"}
+        params = {"filter": "name:eq:PRIDE-C", "fields": "users[email]"},
+        timeout = 60
     )
     _raise_for_status(response, "look up PRIDE-C user group emails")
 
@@ -70,7 +71,8 @@ def send_email_pridec(subject: str,
             "recipients": ",".join(emails),
             "subject": subject,
             "message": message,
-        }
+        },
+        timeout = 600
     )
     _raise_for_status(response, "send email")
 

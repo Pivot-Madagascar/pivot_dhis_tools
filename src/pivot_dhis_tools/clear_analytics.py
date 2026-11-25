@@ -35,7 +35,7 @@ def clear_analytics(dhis_url: str,
     url = f"{dhis_url.rstrip('/')}{clear_cache_endpoint}"
 
     #send request
-    response = requests.post(url, headers=headers, auth=auth)
+    response = requests.post(url, headers=headers, auth=auth, timeout = 120)
     _raise_for_status(response, "clear analytics tables")
 
     logger.info("Analytics tables dropped.")

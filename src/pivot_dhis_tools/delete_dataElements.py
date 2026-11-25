@@ -86,7 +86,7 @@ def delete_dataElements(dhis_url: str,
 
 
     #send request
-    response = requests.post(url, headers=headers, auth=auth, json=delete_json)
+    response = requests.post(url, headers=headers, auth=auth, json=delete_json, timeout = 1200)
     _raise_for_status(response, "delete dataValues")
 
     if verbose:

@@ -68,7 +68,7 @@ def post_dataElements(dhis_url: str,
 
 
     #send request
-    response = requests.post(url, headers=headers, auth=auth, json=payload)
+    response = requests.post(url, headers=headers, auth=auth, json=payload, timeout = 1200)
 
     _raise_for_status(response, "import dataElements")
 
