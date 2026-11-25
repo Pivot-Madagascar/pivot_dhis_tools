@@ -5,7 +5,14 @@
       "release-type": "python",
       "package-name": "pivot_dhis_tools",
       "include-component-in-tag": false,
-      "bootstrap-sha": "979eec337052ea67ccdba43d0a4fac7abfbf3a00"
+      "bootstrap-sha": "979eec337052ea67ccdba43d0a4fac7abfbf3a00",
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='pivot-dhis-tools')].version"
+        }
+      ]
     }
   }
 }

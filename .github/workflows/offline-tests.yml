@@ -1,0 +1,27 @@
+name: Offline tests
+
+on:
+  push:
+    branches: ["**"]   # every branch; leaves out tag pushes
+
+permissions:
+  contents: read
+
+jobs:
+  offline-tests:
+    name: offline (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --locked
+      - name: Run offline tests
+        run: uv run pytest -v -m "not live" 

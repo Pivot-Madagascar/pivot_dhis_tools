@@ -1,5 +1,6 @@
 import requests
-from requests.auth import HTTPBasicAuth
+
+from .api_helpers import _api_auth, _raise_for_status
 
 import logging
 
@@ -7,32 +8,47 @@ logger = logging.getLogger(__name__)
 
 def post_dataElements(dhis_url: str,
                       payload: dict,
-                      user:str | None = None, 
-                      pwd:str | None = None, 
-                      token: str | None = None, 
+                      user: str | None = None,
+                      pwd: str | None = None,
+                      token: str | None = None,
                       dryRun: bool = True,
-                      dx_id_scheme: str = "code"):
-    """
-    POST dataElement values to a dhis2 instance based on the `code` scheme
+                      dx_id_scheme: str = "code") -> requests.Response:
+    """Import dataValues into a DHIS2 instance.
+
+    POSTs `payload` to ``/api/dataValueSets`` with
+    ``importStrategy=CREATE_AND_UPDATE``, so existing values are overwritten.
 
     Args:
-        dhis_url: URL of the DHIS2 instance.
-        payload: JSON payload of dataElement values to send. Each item should contain `orgUnit`, `period`, `code`, `value`.
-                                 orgUnits should be identified by their `uid`.
-        user: Username for the DHIS2 instance. Required if `token` is not provided.
-        pwd: Password for the DHIS2 instance. Required if `token` is not provided.
-        token: Personal access token for the DHIS2 instance. Can be provided
-            instead of `user` and `pwd`.
-        dryRun: If True, performs a dry run without actually posting data.
-            If False, executes the POST request.
-        dx_id_scheme: dataElementIdScheme and categoryOptionComboIdScheme to 
-            post to. Default = code.
+        dhis_url: Base URL of the DHIS2 instance (with or without a trailing slash).
+        payload: Data to import, in DHIS2 dataValueSet form::
+
+                {"dataValues": [{"dataElement": ..., "orgUnit": ...,
+                                 "period": "YYYYMM", "value": ...,
+                                 "categoryOptionCombo": ...}, ...]}
+
+            `orgUnit` must be a UID. `dataElement` and `categoryOptionCombo`
+            follow `dx_id_scheme`. `categoryOptionCombo` is optional.
+        user: DHIS2 username. Required with `pwd` if `token` is not provided.
+        pwd: DHIS2 password. Required with `user` if `token` is not provided.
+        token: DHIS2 personal access token. Takes precedence over `user`/`pwd`.
+        dryRun: If True (default), DHIS2 validates the import without saving
+            anything. Set to False to actually import the data.
+        dx_id_scheme: How `dataElement` and `categoryOptionCombo` are
+            identified in `payload`, e.g. ``"code"`` (default) or ``"uid"``.
 
     Returns:
-        requests.Response: Response object from POST request
+        The `requests.Response` from the POST request. Its JSON body is the
+        DHIS2 import summary. A 200 status can still contain conflicts or
+        ignored values, so check ``importCount`` and ``conflicts`` there.
+
+    Raises:
+        ValueError: If credentials are missing.
+        requests.HTTPError: If DHIS2 returns an error status (e.g. 409 when
+            the whole import is rejected). The response body is logged first.
+        requests.ConnectionError: If the server cannot be reached.
     """
-    if not token and not (user and pwd):
-        raise ValueError("Authentication required: provide either a token or both user and pwd")
+
+    headers, auth = _api_auth(user=user, pwd=pwd, token=token)
 
     if dryRun:
         logger.info("Conducting a dryRun of POST. Data will not be imported.")
@@ -50,21 +66,11 @@ def post_dataElements(dhis_url: str,
 
     url = f"{dhis_url.rstrip('/')}{endpoint}"
 
-    # Authentication setup
-    headers = {'Authorization': f'ApiToken {token}'} if token else {}
-    auth = None if token else HTTPBasicAuth(user, pwd)
-    
+
     #send request
-    response = requests.post(url, headers=headers, auth=auth, json=payload)
+    response = requests.post(url, headers=headers, auth=auth, json=payload, timeout = 1200)
 
-    if not response.ok:
-        logger.error("Failed to import dataElements: HTTP %s %s", response.status_code, response.reason)
-        logger.error("Response: %s", response.text or "(empty body)")
-    response.raise_for_status()
-
-    # resp.json().get("httpStatus")
-    # resp.json().get("status")
-    # resp.json().get("message")
+    _raise_for_status(response, "import dataElements")
 
     logger.info("dataElements imported")
     logger.debug("Response: %s", response.text)

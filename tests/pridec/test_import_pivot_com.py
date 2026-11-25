@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 import pandas as pd
 import pytest
+import requests
 
 from pivot_dhis_tools.pridec import import_pivot as mod
 from pivot_dhis_tools.pridec.import_pivot import import_pivot_com
@@ -86,8 +87,14 @@ def test_post_uses_dhis_credentials_and_defaults_to_dry_run(mocked):
     assert all(p["dryRun"] is True for p in mocked)
 
 
+def test_dryRun_false_is_forwarded(mocked):
+    import_pivot_com(dhis_url="https://dhis.test", dhis_token="dhis-tok",
+                     pivot_token="pivot-tok", pivot_url="https://pivot.test", dryRun=False)
+    assert [p["dryRun"] for p in mocked] == [False] * 3
+
+
 def test_failed_check_declined_skips_post(mocked, monkeypatch, pivot_data):
-    pivot_data["dx:vduU8d1GZbW"] = [_rows("vduU8d1GZbW", "A", "500")]  # over threshold of 200
+    pivot_data["dx:vduU8d1GZbW"] = [_rows("vduU8d1GZbW", "A", "500")]  # over threshold of 100
     monkeypatch.setattr("builtins.input", lambda _prompt: "n")
 
     _run()
@@ -129,7 +136,33 @@ def test_passing_check_never_prompts(mocked, monkeypatch):
     assert len(mocked) == 3
 
 
-LIVE_ENV = ["TEST_URL", "TEST_TOKEN", "PIVOT_URL", "PIVOT_TOKEN"]
+def test_rejected_post_is_logged_and_others_still_post(mocked, monkeypatch, caplog):
+    def fake_post(dhis_url, payload, token, dryRun):
+        target = payload["dataValues"][0]["dataElement"]
+        if target == "pridec_historic_COMRespinf":
+            raise requests.HTTPError("409 Conflict")
+        mocked.append({"dhis_url": dhis_url, "token": token, "dryRun": dryRun,
+                       "values": payload["dataValues"]})
+        return SimpleNamespace(ok=True, status_code=200, text="ok")
+
+    monkeypatch.setattr(mod, "post_dataElements", fake_post)
+    with caplog.at_level("ERROR"):
+        _run()
+
+    assert set(_values_by_target(mocked)) == TARGETS - {"pridec_historic_COMRespinf"}
+    assert "Failed to import pridec_historic_COMRespinf" in caplog.text
+
+
+def test_missing_dhis_token_raises(monkeypatch, pivot_data):
+    monkeypatch.setattr(mod, "get_dataElements",
+                        lambda dhis_url, token, dx_query, pe_query, ou_query, includeNumDen:
+                        pd.DataFrame(pivot_data[dx_query]))
+    with pytest.raises(ValueError, match="Authentication required"):
+        import_pivot_com(dhis_url="https://dhis.test", dhis_token="",
+                         pivot_token="pivot-tok", pivot_url="https://pivot.test")
+
+
+LIVE_ENV = ["TEST_URL", "TEST_TOKEN"]
 
 
 @pytest.mark.live

@@ -1,37 +1,55 @@
 import requests
-from requests.auth import HTTPBasicAuth
+
+from .api_helpers import _raise_for_status, _api_auth
 import pandas as pd
 from datetime import datetime
 
-def delete_dataElements(dhis_url, dataElement, delete_month_range, orgUnit_ids, 
-                        user=None, pwd=None, token=None, dryRun=False, verbose=True):
-    """
-    Deletes climate dataElement values from the provided date range and orgUnits
+def delete_dataElements(dhis_url: str,
+                        dataElement: str,
+                        delete_month_range: list[str],
+                        orgUnit_ids: list[str],
+                        user: str | None = None,
+                        pwd: str | None = None,
+                        token: str | None = None,
+                        dryRun: bool = False,
+                        verbose: bool = True) -> requests.Response | None:
+    """Delete the values of one dataElement for a range of months and orgUnits.
+
+    Builds one placeholder value for every month in `delete_month_range` and
+    every orgUnit in `orgUnit_ids`, then POSTs them to ``/api/dataValueSets``
+    with ``importStrategy=DELETE`` and ``force=true``.
+
+    Unless `dryRun` is True, you are asked on the terminal to type ``yes``
+    before anything is deleted; any other answer returns without sending
+    the request.
 
     Args:
-        dhis_url (str)              url of dhis2 instance
-        dataElement (str)           code of dataElement to delete. Example: 'pridec_climate_AOD'
-        delete_month_range (list)   range of months of data to delete in YYYYMM format. Example: ["202201", "202208"]
-        orgUnit_ids (list)          list of orgUnit ids to delete data from
-        user (str, optional)        username for dhis2 instance
-        pwd (str, optional)         password for dhis2 instance
-        token (str, optional)       personal access token for dhis2 instance.
-                                    Can be provided instead of user and pwd.
-        dryRun (boolean)            True: test a dry run of the POST
-                                    False: actually post the data
-        verbose (boolean)           True (default): return response message
-                                    False: return response code
-    
+        dhis_url: Base URL of the DHIS2 instance (with or without a trailing slash).
+        dataElement: Code (not UID) of the dataElement to delete, e.g.
+            ``"pridec_climate_AOD"``.
+        delete_month_range: First and last month to delete, inclusive, in
+            ``YYYYMM`` format, e.g. ``["202201", "202208"]``.
+        orgUnit_ids: UIDs of the orgUnits to delete data from.
+        user: DHIS2 username. Required with `pwd` if `token` is not provided.
+        pwd: DHIS2 password. Required with `user` if `token` is not provided.
+        token: DHIS2 personal access token. Takes precedence over `user`/`pwd`.
+        dryRun: If True, DHIS2 validates the deletion without saving it and
+            no confirmation is asked. Default False.
+        verbose: If True (default), print the ``response`` part of the
+            DHIS2 import summary.
+
     Returns:
-        requests.Response: Response object from DELETE request
+        The `requests.Response` from the POST request, or None if the
+        deletion was not confirmed at the prompt.
+
+    Raises:
+        ValueError: If credentials are missing, or if a month in
+            `delete_month_range` is not in ``YYYYMM`` format.
+        requests.HTTPError: If DHIS2 returns an error status.
+        requests.ConnectionError: If the server cannot be reached.
     """
-    if not token and not (user and pwd):
-        raise ValueError("Authentication required: provide either a token or both user and pwd")
-    
-    # Authentication setup
-    headers = {'Authorization': f'ApiToken {token}'} if token else {}
-    auth = None if token else HTTPBasicAuth(user, pwd)
-    
+    headers, auth = _api_auth(user=user, pwd=pwd, token=token)
+
     #create json of full range to delete
     start_date = datetime.strptime(delete_month_range[0], "%Y%m")
     end_date = datetime.strptime(delete_month_range[1], "%Y%m")
@@ -57,9 +75,8 @@ def delete_dataElements(dhis_url, dataElement, delete_month_range, orgUnit_ids,
         "&force=true"
     )
 
-
     url = f"{dhis_url.rstrip('/')}/{endpoint}"
-    
+
     if dryRun is False:
         print("!! You are not in dryRun mode. This will delete data on your instance. !!")
         validate_delete = input("Confirm that you want to continue (yes/no):")
@@ -69,11 +86,12 @@ def delete_dataElements(dhis_url, dataElement, delete_month_range, orgUnit_ids,
 
 
     #send request
-    response = requests.post(url, headers=headers, auth=auth, json=delete_json)
+    response = requests.post(url, headers=headers, auth=auth, json=delete_json, timeout = 1200)
+    _raise_for_status(response, "delete dataValues")
 
     if verbose:
         resp_text = response.json().get("response") #for debugging
         print(resp_text)
-    
+
 
     return response

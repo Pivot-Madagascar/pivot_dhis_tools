@@ -1,0 +1,34 @@
+name: All tests (including live)
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  all-tests:
+    name: all tests (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked 
+
+      - name: Run tests
+        env:
+          TEST_TOKEN: ${{ secrets.TEST_TOKEN }}
+          TEST_URL: ${{ secrets.TEST_URL }}
+        run: uv run pytest -v

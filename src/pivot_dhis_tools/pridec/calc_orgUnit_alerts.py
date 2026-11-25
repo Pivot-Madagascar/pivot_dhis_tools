@@ -4,52 +4,74 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 
 from ..get_dataElements import get_dataElements
+from ..api_helpers import _api_auth
 
 import logging
 logger = logging.getLogger(__name__)
 
 #note that some things are hardcoded for Ifanadiana currently, particularly orgUnit
 def calc_orgUnit_alerts(dhis_url: str, parent_ou: str, ou_level: int, disease_code: str,
-                        token: str = None, user: str = None, pwd: str = None,
-                        focal_date: date = None, 
-                        forecast_json: dict = None,
-                        historic_json: dict = None,
-                        alert_name: str = None):
-    """
-    Estimate the numbers of orgUnits on alert, e.g. the number expected to see more cases over the next three months than over the same period for the prior 3 years
+                        token: str | None = None, user: str | None = None, pwd: str | None = None,
+                        focal_date: date | None = None,
+                        forecast_json: dict | list | None = None,
+                        historic_json: dict | list | None = None,
+                        alert_name: str | None = None) -> dict:
+    """Count the orgUnits on alert for one PRIDE-C disease.
+
+    An orgUnit at `ou_level` under `parent_ou` is on alert when its mean
+    ``pridec_forecast_<disease_code>Avg`` over the three months starting at
+    `focal_date` is higher than its mean ``pridec_historic_<disease_code>``
+    over the same three months in the prior three years. Equal means are
+    not on alert. orgUnits missing from either dataset are left out of the
+    count and logged as a warning.
+
+    Each dataset is read from `forecast_json` / `historic_json` if given,
+    otherwise fetched from DHIS2 with `get_dataElements`. Credentials are
+    only needed when at least one dataset is fetched.
 
     Args:
-        dhis_url (str)           url of dhis2 instance
-        parent_ou (str)          ou ID of the parent orgUnit
-        ou_level (int)        level of orgUnits for which to calculate the alert
-        disease_code (str)       code of PRIDE_C disease dataElement to estimate. Is what comes after `pridec_historic_`
-        user (str, optional)     username for dhis2 instance
-        pwd (str, optional)      password for dhis2 instance
-        token (str, optional)    personal access token for dhis2 instance.
-                                 Can be provided instead of user and pwd.
-        focal_date(date, optional) period for which to calculate CSB alert. If None, defaults to current month
-        forecast_json       Locally-provided forecast data, in one of two
-                            equivalent shapes:
-                            - a dict with a top-level "dataValues" key (matching a raw DHIS2 export),
-                                whose value is a list of records, e.g.:
-                                    {"dataValues": [{"dataElement": ..., "orgUnit": ..., "period": ...,
-                                                    "value": ...}, ...]}
-                            - or that same list of records passed directly, without the
-                                "dataValues" wrapper.
-                            Each record must include the keys "dataElement", "orgUnit", "period",
-                            and "value". If not provided, data will be sourced from the DHIS2
-                            instance instead. 
-        historic_json       Locally-provided historic data, follows forecast_json formatting requirements above. If not provided, data will be sourced from the DHIS2
-                            instance instead. 
-        alert_name          name of alert dataElement that comes after `pridec_alert_`
-    
+        dhis_url: Base URL of the DHIS2 instance (with or without a trailing slash).
+        parent_ou: UID of the parent orgUnit. The result is posted to it.
+        ou_level: orgUnit level to compare (e.g. ``5`` for CSBs).
+        disease_code: Disease part of the PRIDE-C dataElement codes, i.e.
+            what follows ``pridec_historic_`` (e.g. ``"COMRespinf"``).
+        token: DHIS2 personal access token. Takes precedence over `user`/`pwd`.
+        user: DHIS2 username. Required with `pwd` if `token` is not provided
+            and a dataset has to be fetched.
+        pwd: DHIS2 password. Required with `user` if `token` is not provided
+            and a dataset has to be fetched.
+        focal_date: Any day in the first month of the forecast window. If
+            None (default), the current month is used.
+        forecast_json: Forecast data to use instead of fetching it, either a
+            raw DHIS2 export ``{"dataValues": [record, ...]}`` or the list of
+            records itself. Each record needs ``dataElement`` (code),
+            ``orgUnit``, ``period`` (``YYYYMM``) and ``value``. Records for
+            other dataElements or periods are ignored. Not modified.
+        historic_json: Historic data to use instead of fetching it, in the
+            same form as `forecast_json`.
+        alert_name: What follows ``pridec_alert_`` in the output dataElement
+            code. Defaults to `disease_code`.
+
     Returns:
-        JSON object with number of orgUnit on alert. Formatted to post directly to DHIS2
+        A dict ready to POST with `post_dataElements`, holding one record::
+
+            {"dataValues": [{"dataElement": "pridec_alert_<alert_name>",
+                             "orgUnit": parent_ou, "period": "YYYYMM",
+                             "value": <number of orgUnits on alert>}]}
+
+        where ``period`` is the month of `focal_date`.
+
+    Raises:
+        ValueError: If credentials are needed but missing; if local data is
+            missing a required key, has no records for the disease, or has
+            non-numeric or missing values; if there is no forecast or no
+            historic data for the window; or if no orgUnit has both.
+        requests.HTTPError: If fetching from DHIS2 returns an error status.
+        requests.ConnectionError: If the server cannot be reached.
     """
 
     if forecast_json is None or historic_json is None:
-        if not token and not (user and pwd):
-            raise ValueError("Must provide either `token` or both `user` and `pwd` to query DHIS2")
+        _api_auth(user=user, pwd=pwd, token=token)
 
     def get_historical_periods(dates, years_prior=3):
         out = []
@@ -86,6 +108,8 @@ def calc_orgUnit_alerts(dhis_url: str, parent_ou: str, ou_level: int, disease_co
                                     ou_query= f"ou:LEVEL-{ou_level};{parent_ou}", 
                                     pe_query=f"pe:{';'.join(current_period_yyyymm)}",
                                     token = token,
+                                    user=user,
+                                    pwd = pwd,
                                     dx_id_scheme="CODE")
         
         forecast_data = forecast_data.rename(columns={'ou': 'orgUnit',
@@ -129,6 +153,8 @@ def calc_orgUnit_alerts(dhis_url: str, parent_ou: str, ou_level: int, disease_co
                                 ou_query= f"ou:LEVEL-{ou_level};{parent_ou}", 
                                 pe_query=f"pe:{';'.join(hist_period_yyyymm)}",
                                 token = token,
+                                user = user,
+                                pwd = pwd,
                                 dx_id_scheme="CODE")
         
         historic_data = historic_data.rename(columns={'ou': 'orgUnit',

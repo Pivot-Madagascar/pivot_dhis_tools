@@ -1,6 +1,20 @@
-import numpy as np
+import pandas as pd
 
-def check_dhis_value(df):
+def check_dhis_value(df: pd.DataFrame) -> str:
+    """Check that a DataFrame of values has no missing or negative values.
+
+    Args:
+        df: Data with a ``value`` column of numbers.
+
+    Returns:
+        A one-line summary: number of missing values, minimum, maximum and
+        number of negative values. Empty data passes, with a NaN minimum
+        and maximum.
+
+    Raises:
+        ValueError: If any value is missing (NaN/None) or negative.
+        KeyError: If `df` has no ``value`` column.
+    """
     this_value = df['value']
     
     err_1 = this_value.isna().sum()
@@ -19,7 +33,26 @@ def check_dhis_value(df):
     return(f"numNA: {err_1} | minimum value: {this_value.min()} | maximum value: {this_value.max()} | negative values: {err_3}")
 
 
-def check_import_value(df, max_threshold: int):
+def check_import_value(df: pd.DataFrame, max_threshold: int) -> str:
+    """Check values before they are imported into DHIS2.
+
+    Fails if the data is empty, or has missing, negative, or implausibly
+    large values. All problems found are listed in one error.
+
+    Args:
+        df: Data with a ``value`` column of numbers.
+        max_threshold: Largest value allowed; values strictly above it fail.
+
+    Returns:
+        A one-line summary: number of missing values, minimum, maximum,
+        number of negative values and number of values.
+
+    Raises:
+        ValueError: If the data is empty or any value is missing, negative or
+            above `max_threshold`. The summary is appended to the message
+            and also set as the error's ``summary`` attribute.
+        KeyError: If `df` has no ``value`` column.
+    """
     this_value = df['value']
 
     is_empty = this_value.empty

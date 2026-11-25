@@ -1,33 +1,43 @@
 import requests
-from requests.auth import HTTPBasicAuth
-import pandas as pd
-import re
+
+from .api_helpers import _raise_for_status, _api_auth
 
 import logging
 logger = logging.getLogger(__name__)
 
-def dx_code_to_uid(dhis_url: str, 
-                              codes: list[str], 
-                              user:str | None = None, 
-                     pwd:str | None = None, 
-                     token: str | None = None,  ) -> dict:
-    """
-    Look up a list of dataElement/indicator CODEs and return a {code: uid} mapping.
-    Queries both /api/dataElements and /api/indicators since `dx` can contain either.
-    """
-    if not token and not (user and pwd):
-        raise ValueError("Authentication required: provide either a token or both user and pwd")
+def dx_code_to_uid(dhis_url: str,
+                   codes: list[str],
+                   user: str | None = None,
+                   pwd: str | None = None,
+                   token: str | None = None) -> dict[str, str]:
+    """Look up the UIDs of dataElement and indicator codes.
 
-    # Authentication setup
-    headers = {'Authorization': f'ApiToken {token}'} if token else {}
-    auth = None if token else HTTPBasicAuth(user, pwd)
+    Queries both ``/api/dataElements`` and ``/api/indicators``, since an
+    analytics `dx` dimension can hold either. If a code exists in both, the
+    indicator's UID is kept.
+
+    Args:
+        dhis_url: Base URL of the DHIS2 instance (with or without a trailing slash).
+        codes: dataElement and/or indicator codes to look up.
+        user: DHIS2 username. Required with `pwd` if `token` is not provided.
+        pwd: DHIS2 password. Required with `user` if `token` is not provided.
+        token: DHIS2 personal access token. Takes precedence over `user`/`pwd`.
+
+    Returns:
+        A ``{code: uid}`` dict. Codes with no match are left out and logged
+        as a warning, so the dict can be smaller than `codes` or empty.
+
+    Raises:
+        ValueError: If credentials are missing.
+        requests.HTTPError: If either lookup returns an error status.
+        requests.ConnectionError: If the server cannot be reached.
+        requests.Timeout: If a lookup takes longer than 600 seconds.
+    """
+    headers, auth = _api_auth(user=user, pwd=pwd, token=token)
 
     base_url = dhis_url.rstrip('/')
     code_to_uid = {}
 
-    # dataSets are also valid dx items (for reporting rates), but reporting rate items
-    # use the `<dataset>.REPORTING_RATE` syntax rather than a bare code, so they're
-    # skipped here and passed through untouched by the caller.
     for endpoint in ("dataElements", "indicators"):
         resp = requests.get(
             f"{base_url}/api/{endpoint}.json",
@@ -40,7 +50,7 @@ def dx_code_to_uid(dhis_url: str,
             auth=auth,
             timeout=600,
         )
-        resp.raise_for_status()
+        _raise_for_status(resp, f"look up {endpoint} codes")
         for item in resp.json().get(endpoint, []):
             if item.get("code"):
                 code_to_uid[item["code"]] = item["id"]
