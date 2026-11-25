@@ -60,6 +60,30 @@ def test_positional_args_rejected():
 
 # ---- check_dhis_connection ----
 
+# ---- _raise_for_status ----
+
+def test_raise_for_status_ok_is_silent(caplog):
+    with caplog.at_level("ERROR"):
+        mod._raise_for_status(_response(200), "do a thing")
+    assert caplog.text == ""
+
+
+def test_raise_for_status_logs_body_then_raises(caplog):
+    resp = _response(409, b'{"message": "conflict on dataElement X"}')
+    with caplog.at_level("ERROR"), pytest.raises(requests.HTTPError):
+        mod._raise_for_status(resp, "do a thing")
+    assert "Failed to do a thing: HTTP 409" in caplog.text
+    assert "conflict on dataElement X" in caplog.text
+
+
+def test_raise_for_status_flags_empty_body(caplog):
+    with caplog.at_level("ERROR"), pytest.raises(requests.HTTPError):
+        mod._raise_for_status(_response(401, b""), "do a thing")
+    assert "(empty body)" in caplog.text
+
+
+# ---- check_dhis_connection ----
+
 @pytest.fixture
 def captured(monkeypatch):
     """Replace requests.get with a fake returning 200; return the list of captured calls."""

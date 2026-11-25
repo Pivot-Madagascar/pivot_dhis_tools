@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 import pandas as pd
 import pytest
+import requests
 
 from pivot_dhis_tools.pridec import import_pivot as mod
 from pivot_dhis_tools.pridec.import_pivot import import_pivot_csb
@@ -72,6 +73,18 @@ def test_posts_summed_values_for_each_element(mocked):
     assert vals["pridec_historic_CSBDiarrhea"] == {"A": 7, "B": 1}
 
 
+def test_dryRun_false_is_forwarded(mocked, monkeypatch):
+    dry_runs = []
+
+    def fake_post(dhis_url, payload, token, dryRun):
+        dry_runs.append(dryRun)
+        return SimpleNamespace(ok=True, status_code=200, text="ok")
+
+    monkeypatch.setattr(mod, "post_dataElements", fake_post)
+    import_pivot_csb(dhis_url="u", dhis_token="t", pivot_token="p", pivot_url="pu", dryRun=False)
+    assert dry_runs == [False] * 3
+
+
 def test_posts_use_pridec_u5_coc(mocked):
     import_pivot_csb(dhis_url="u", dhis_token="t", pivot_token="p", pivot_url="pu")
 
@@ -114,9 +127,24 @@ def test_skips_are_logged(mocked, monkeypatch, caplog):
     assert any("Skipping import of pridec_historic_CSBRespinf: failed the value check" in m for m in msgs)
 
 
+def test_rejected_post_is_logged_and_others_still_post(mocked, monkeypatch, caplog):
+    def fake_post(dhis_url, payload, token, dryRun):
+        if payload["dataValues"][0]["dataElement"] == "pridec_historic_CSBMalaria":
+            raise requests.HTTPError("409 Conflict")
+        mocked.posts.append(payload["dataValues"])
+        return SimpleNamespace(ok=True, status_code=200, text="ok")
+
+    monkeypatch.setattr(mod, "post_dataElements", fake_post)
+    with caplog.at_level("ERROR"):
+        import_pivot_csb(dhis_url="u", dhis_token="t", pivot_token="p", pivot_url="pu")
+
+    assert {v[0]["dataElement"] for v in mocked.posts} == TARGETS - {"pridec_historic_CSBMalaria"}
+    assert "Failed to import pridec_historic_CSBMalaria" in caplog.text
+
+
 # ---------------- live ----------------
 
-LIVE_ENV = ["TEST_URL", "TEST_TOKEN", "PIVOT_URL", "PIVOT_TOKEN"]
+LIVE_ENV = ["TEST_URL", "TEST_TOKEN"]
 
 
 @pytest.mark.live

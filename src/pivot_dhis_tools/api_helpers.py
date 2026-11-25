@@ -1,5 +1,9 @@
+import logging
+
 import requests
 from requests.auth import HTTPBasicAuth
+
+logger = logging.getLogger(__name__)
 
 
 def _api_auth(
@@ -38,6 +42,28 @@ def _api_auth(
     raise ValueError(
         "Authentication required: provide either a token or both user and pwd"
     )
+
+
+def _raise_for_status(response: requests.Response, action: str) -> None:
+    """Log the details of a failed DHIS2 response, then raise.
+
+    `raise_for_status` alone reports only the status and URL. The response
+    body, where DHIS2 explains what went wrong (import conflicts, validation
+    errors), is lost unless it is logged first.
+
+    Args:
+        response: The response to check.
+        action: What the request was doing, worded to follow "Failed to",
+            e.g. ``"import dataElements"``.
+
+    Raises:
+        requests.HTTPError: If the response has a 4xx or 5xx status.
+    """
+    if not response.ok:
+        logger.error("Failed to %s: HTTP %s %s", action, response.status_code,
+                     response.reason or "")
+        logger.error("Response: %s", response.text or "(empty body)")
+    response.raise_for_status()
 
 
 def check_dhis_connection(
@@ -85,5 +111,5 @@ def check_dhis_connection(
             f"{response.headers.get('Location')}; credentials were likely rejected",
             response=response,
         )
-    response.raise_for_status()
+    _raise_for_status(response, "connect to DHIS2")
     return response.json()

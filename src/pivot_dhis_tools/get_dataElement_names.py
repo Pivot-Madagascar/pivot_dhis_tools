@@ -1,42 +1,42 @@
 import requests
-from requests.auth import HTTPBasicAuth
-import pandas as pd
+
+from .api_helpers import _raise_for_status, _api_auth
 
 import logging
 logger = logging.getLogger(__name__)
 
 def get_dataElement_names(dhis_url: str,
                      pattern: str | None = None,
-                     user:str | None = None, 
-                     pwd:str | None = None, 
-                     token: str | None = None):
-    """
-    Fetch all dataElements from a DHIS2 instance whose names match a pattern.
+                     user: str | None = None,
+                     pwd: str | None = None,
+                     token: str | None = None) -> list[dict]:
+    """Fetch the dataElements on a DHIS2 instance whose names match a pattern.
 
     Args:
-        dhis_url:  Base URL of the DHIS2 instance
-        pattern:   Pattern to match against dataElement names using case-insensitive substring match. Default gets all names
-        user: Username for the DHIS2 instance. Required if `token` is not provided.
-        pwd: Password for the DHIS2 instance. Required if `token` is not provided.
-        token: Personal access token for the DHIS2 instance. Can be provided
-            instead of `user` and `pwd`.
+        dhis_url: Base URL of the DHIS2 instance (with or without a trailing slash).
+        pattern: Text to look for in dataElement names, matched as a
+            case-insensitive substring (DHIS2 ``name:ilike`` filter). As in
+            SQL ``LIKE``, ``_`` matches any single character and ``%`` any
+            run of characters, so ``"pridec_"`` also matches ``"pridec "``.
+            If None (default), every dataElement is returned.
+        user: DHIS2 username. Required with `pwd` if `token` is not provided.
+        pwd: DHIS2 password. Required with `user` if `token` is not provided.
+        token: DHIS2 personal access token. Takes precedence over `user`/`pwd`.
 
     Returns:
-        List of matching dataElement dicts with 'id' and 'name'.
+        A list of dicts with keys ``id``, ``name`` and, where the
+        dataElement has one, ``code``. Empty if nothing matches. To view::
 
-        View all elements via:
             for el in result:
                 print(el["id"], el["name"])
 
-        Can apply regex search to name afterwards as well
+    Raises:
+        ValueError: If credentials are missing.
+        requests.HTTPError: If DHIS2 returns an error status.
+        requests.ConnectionError: If the server cannot be reached.
+        requests.Timeout: If the request takes longer than 180 seconds.
     """
-     
-    if not token and not (user and pwd):
-        raise ValueError("Authentication required: provide either a token or both user and pwd")
-
-    # Authentication setup
-    headers = {'Authorization': f'ApiToken {token}'} if token else {}
-    auth = None if token else HTTPBasicAuth(user, pwd)
+    headers, auth = _api_auth(user=user, pwd=pwd, token=token)
 
     url = f"{dhis_url.rstrip('/')}/api/dataElements.json"
 
@@ -53,8 +53,8 @@ def get_dataElement_names(dhis_url: str,
         }
 
     response = requests.get(url, params=params, headers=headers, auth=auth, timeout = 180)
-    
-    response.raise_for_status() 
+
+    _raise_for_status(response, "fetch dataElement names")
     logger.debug("Response Reason: %s", response.reason)
 
     return response.json().get("dataElements", [])

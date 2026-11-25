@@ -1,37 +1,44 @@
 import requests
-from requests.auth import HTTPBasicAuth
 
 import logging
 logger = logging.getLogger(__name__)
 
-def send_email_pridec(subject : str, 
-                     message : str,
+from ..api_helpers import _api_auth, _raise_for_status
+
+def send_email_pridec(subject: str,
+                     message: str,
                      dhis_url: str,
-                     user: str | None = None, 
-                     pwd: str | None = None, 
+                     user: str | None = None,
+                     pwd: str | None = None,
                      token: str | None = None
-                     ):
-    """
-    Send email to all PRIDE-C users
+                     ) -> dict:
+    """Email every member of the PRIDE-C user group through DHIS2.
+
+    Looks up the email addresses of the users in the ``PRIDE-C`` user group,
+    then sends one message to all of them via
+    ``/api/33/email/notification``. Users without an email address are
+    skipped. The DHIS2 instance must have an email server configured.
 
     Args:
-        subject: subject of email message
-        message: email message, can be plain text or HTML
-        dhis_url: URL of the DHIS2 instance.
-        user: Username for the DHIS2 instance. Required if `token` is not provided.
-        pwd: Password for the DHIS2 instance. Required if `token` is not provided.
-        token: Personal access token for the DHIS2 instance. Can be provided
-            instead of `user` and `pwd`.
-    
+        subject: Subject line of the email.
+        message: Body of the email, as plain text or HTML.
+        dhis_url: Base URL of the DHIS2 instance (with or without a trailing slash).
+        user: DHIS2 username. Required with `pwd` if `token` is not provided.
+        pwd: DHIS2 password. Required with `user` if `token` is not provided.
+        token: DHIS2 personal access token. Takes precedence over `user`/`pwd`.
+
     Returns:
-        requests.Response: Response object from POST request
+        ``{"status": "sent", "recipients": [<email>, ...]}`` once DHIS2 has
+        accepted the email.
+
+    Raises:
+        ValueError: If credentials are missing, if there is no ``PRIDE-C``
+            user group, or if none of its users has an email address.
+        requests.HTTPError: If the group lookup or the send returns an
+            error status (e.g. 409 if no email server is configured).
+        requests.ConnectionError: If the server cannot be reached.
     """
-    if not token and not (user and pwd):
-        raise ValueError("Authentication required: provide either a token or both user and pwd")
-    
-    # Authentication setup
-    headers = {'Authorization': f'ApiToken {token}'} if token else {}
-    auth = None if token else HTTPBasicAuth(user, pwd)
+    headers, auth = _api_auth(user=user, pwd=pwd, token=token)
 
     dhis_url = f"{dhis_url.rstrip('/')}"
 
@@ -42,9 +49,13 @@ def send_email_pridec(subject : str,
         auth = auth,
         params = {"filter": "name:eq:PRIDE-C", "fields": "users[email]"}
     )
-    response.raise_for_status()
+    _raise_for_status(response, "look up PRIDE-C user group emails")
 
-    users = response.json()["userGroups"][0]["users"]
+    groups = response.json().get("userGroups", [])
+    if not groups:
+        raise ValueError("No user group named PRIDE-C found")
+
+    users = groups[0].get("users", [])
     emails = [u["email"] for u in users if u.get("email")]
 
     if not emails:
@@ -61,6 +72,6 @@ def send_email_pridec(subject : str,
             "message": message,
         }
     )
-    response.raise_for_status()
+    _raise_for_status(response, "send email")
 
     return {"status": "sent", "recipients": emails}

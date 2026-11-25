@@ -1,39 +1,64 @@
 from datetime import date
 from dateutil.relativedelta import relativedelta
 import requests
-from requests.auth import HTTPBasicAuth
-import json
 import logging
 
 from ..create_period_range import create_period_range
+from ..api_helpers import _api_auth, _raise_for_status
 
 logger = logging.getLogger(__name__)
 
 def fetch_climate(dhis_url: str, ou_level: int, ou_parent: str,
-                         user: str = None, pwd: str = None, token: str = None, past_years: int = 10):
-    """
-    Fetch historical climate data for all praidec elements during `past_years`
+                         user: str = None, pwd: str = None, token: str = None, past_years: int = 10,
+                         timeout: float = 300):
+    """Fetch monthly historical climate data for every PRIDE-C climate dataElement.
+
+    Looks up all dataElements whose code contains ``pridec_climate``, then
+    queries the analytics API once per dataElement for every orgUnit at
+    `ou_level` under `ou_parent`. The period range runs from the same month
+    `past_years` years ago through last month (the current, incomplete month
+    is excluded), i.e. ``past_years * 12`` monthly periods.
 
     Args:
-        dhis_url (str)          url of dhis instance
-        ou_level (int)          numeric value of orgUnit level to extract climate data for
-        ou_parent (str)         uid of parent orgUnit containing orgUnits to extract
-        user (str, optional)    DHIS username
-        pwd (str, optional)     DHIS password
-        token (str, optional)   DHIS token
-        past_years (int)        how many prior years to download. Default = 10      
-        
-    Returns:
-        list: PRIDE-C climate data. 
-            can be put into json for dhis2 using `json.dump({"dataValues": data_list}, f, indent=2)`
-    """
-     
-    if not token and not (user and pwd):
-        raise ValueError("Authentication required: provide either a token or both user and pwd")
+        dhis_url: Base URL of the DHIS2 instance (with or without a trailing
+            slash, e.g. ``"https://dhis.example.org"``).
+        ou_level: orgUnit level to return data for (e.g. ``5`` for health
+            facilities).
+        ou_parent: UID of the parent orgUnit; only its descendants at
+            `ou_level` are returned.
+        user: DHIS2 username. Required with `pwd` if `token` is not provided.
+        pwd: DHIS2 password. Required with `user` if `token` is not provided.
+        token: DHIS2 personal access token. Takes precedence over `user`/`pwd`.
+        past_years: Number of years of history to download. Default ``10``.
+        timeout: Seconds to wait for each request before giving up. Applies
+            to every request separately, not the whole fetch. Default ``300``.
 
-    # Authentication setup
-    headers = {'Authorization': f'ApiToken {token}'} if token else {}
-    auth = None if token else HTTPBasicAuth(user, pwd)
+    Returns:
+        A list of dicts, one per orgUnit/period/dataElement value returned
+        by analytics::
+
+            {"orgUnit": "<ou uid>", "period": "YYYYMM",
+             "dataElement": "<dataElement code>", "value": <float>}
+
+        `dataElement` holds the dataElement **code**, not its UID, so import
+        it with ``dataElementIdScheme=CODE``. Periods with no data are absent
+        rather than zero. The list is empty if analytics has no data for any
+        element. To write it as a DHIS2 import file::
+
+            json.dump({"dataValues": data_list}, f, indent=2)
+
+    Raises:
+        ValueError: If credentials are missing, or if no dataElement code
+            contains ``pridec_climate``.
+        requests.HTTPError: If the dataElement lookup or any analytics
+            request returns an error status (e.g. 401 for bad credentials,
+            409 for an invalid orgUnit or period).
+        requests.ConnectionError: If the server cannot be reached.
+        requests.Timeout: If any request takes longer than `timeout`.
+    """
+
+    headers, auth = _api_auth(user=user, pwd=pwd, token=token)
+    dhis_url = dhis_url.rstrip("/")
 
     orgUnits = f"LEVEL-{ou_level};{ou_parent}"
 
@@ -51,8 +76,8 @@ def fetch_climate(dhis_url: str, ou_level: int, ou_parent: str,
         f"&paging=false"
     )
 
-    resp = requests.get(de_lookup_url, headers=headers, auth=auth)
-    resp.raise_for_status()
+    resp = requests.get(de_lookup_url, headers=headers, auth=auth, timeout=timeout)
+    _raise_for_status(resp, "look up pridec_climate dataElements")
 
     data_elements = resp.json()["dataElements"]
 
@@ -79,8 +104,8 @@ def fetch_climate(dhis_url: str, ou_level: int, ou_parent: str,
 
         logger.info("Fetching data for %s...", de_code)
 
-        resp = requests.get(analytics_url, headers=headers)
-        resp.raise_for_status()
+        resp = requests.get(analytics_url, headers=headers, auth=auth, timeout=timeout)
+        _raise_for_status(resp, "fetch climate analytics data")
 
         data = resp.json()
 

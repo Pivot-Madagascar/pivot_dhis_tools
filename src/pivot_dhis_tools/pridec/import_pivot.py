@@ -1,4 +1,5 @@
 import pandas as pd
+import requests
 from datetime import date
 from dateutil.relativedelta import relativedelta
 import logging
@@ -67,9 +68,22 @@ def _check_summary(df, target, *, max_threshold, logger):
 
 
 def _check_and_post(df, target, *, max_threshold, dhis_url, dhis_token, dryRun, logger):
+    """Check one element's data and POST it to PRIDE-C.
+
+    Skips the element (with a warning) if `df` is empty, or if the value
+    check fails and posting anyway is not approved at the terminal. A POST
+    that DHIS2 rejects is logged and skipped so the other elements still run.
+
+    Returns:
+        True if the data was posted, False if it was skipped or rejected.
+
+    Raises:
+        ValueError: If `dhis_token` is empty.
+        requests.ConnectionError: If the PRIDE-C instance cannot be reached.
+    """
     if df.empty:
         logger.warning("Skipping import of %s: no values left to import after removing missing data", target)
-        return
+        return False
 
     try:
         summary = check_import_value(df, max_threshold=max_threshold)
@@ -85,18 +99,20 @@ def _check_and_post(df, target, *, max_threshold, dhis_url, dhis_token, dryRun, 
             reason = "no interactive terminal to approve it"
         if answer.strip().lower() not in ("y", "yes"):
             logger.warning("Skipping import of %s: failed the value check and %s", target, reason)
-            return
+            return False
         logger.info("Continuing to post %s despite failed check", target)
 
     logger.info("Importing %s into PRIDE-C instance with dryRun = %s", target, dryRun)
-    resp = post_dataElements(dhis_url=dhis_url, payload={"dataValues": df.to_dict(orient="records")},
-                             token=dhis_token, dryRun=dryRun)
-    if resp.ok:
-        logger.info("Imported %s", target)
-        logger.debug("Response: %s", resp.text)
-    else:
-        logger.error("Failed to import %s with status code %s", target, resp.status_code)
-        logger.error("Response: %s", resp.text)
+    try:
+        resp = post_dataElements(dhis_url=dhis_url, payload={"dataValues": df.to_dict(orient="records")},
+                                 token=dhis_token, dryRun=dryRun)
+    except requests.HTTPError:
+        # post_dataElements has already logged the status and response body
+        logger.error("Failed to import %s; continuing with the remaining elements", target)
+        return False
+    logger.info("Imported %s", target)
+    logger.debug("Response: %s", resp.text)
+    return True
 
 
 def _fetch_com_element(target, dx_ids, *, period_list, org_query, full_grid,
@@ -189,7 +205,7 @@ def import_pivot_com(dhis_url: str,
     Each element is checked with `check_import_value` (maximum 100 cases per fokontany
     and period) before posting. If the check fails, you are prompted on the terminal
     whether to post anyway; with no terminal the element is skipped. An element that
-    is skipped or fails to post is logged and does not stop the others.
+    is skipped, or whose POST DHIS2 rejects, is logged and does not stop the others.
 
     Args:
         dhis_url: URL of the PRIDE-C DHIS2 instance to import into.
@@ -208,9 +224,12 @@ def import_pivot_com(dhis_url: str,
         to the logger.
 
     Raises:
-        requests.HTTPError: If a request to the Pivot instance fails.
-        ValueError: If `pivot_token` is empty, so no authentication is supplied.
-        ValueError: If `dhis_token` is empty, so the POST has no authentication.
+        ValueError: If `pivot_token` is empty, or if `dhis_token` is empty
+            and at least one element reaches the post step.
+        requests.HTTPError: If a request to the Pivot instance fails. A
+            rejected POST to PRIDE-C does not raise; it is logged and the
+            remaining elements are still imported.
+        requests.ConnectionError: If either instance cannot be reached.
     """
 
     if dryRun:
@@ -266,9 +285,11 @@ def fetch_pivot_com_etlhub(
                 - text: the `check_import_value` summary string, returned whether or not the check passes
                 - flagged: True if `check_import_value` raised a ValueError
                 - error: the ValueError message if flagged, otherwise None
+
     Raises:
+        ValueError: If `pivot_token` is empty.
         requests.HTTPError: If a request to the Pivot instance fails.
-        ValueError: If `pivot_token` is empty, so no authentication is supplied.
+        requests.ConnectionError: If the Pivot instance cannot be reached.
     """
     logger.info("Fetching level 6 orgUnits (fokontany) under %s", parent_ou)
     
@@ -347,7 +368,7 @@ def import_pivot_csb(dhis_url: str,
     Each element is checked with `check_import_value` (maximum 500 cases per CSB/month)
     before posting. If the check fails, you are prompted on the terminal
     whether to post anyway; with no terminal the element is skipped. An element that
-    is skipped or fails to post is logged and does not stop the others.
+    is skipped, or whose POST DHIS2 rejects, is logged and does not stop the others.
 
     Args:
         dhis_url: URL of the PRIDE-C DHIS2 instance to import into.
@@ -364,9 +385,12 @@ def import_pivot_csb(dhis_url: str,
         to the logger.
 
     Raises:
-        requests.HTTPError: If a request to the Pivot instance fails.
-        ValueError: If `pivot_token` is empty, so no authentication is supplied.
-        ValueError: If `dhis_token` is empty, so the POST has no authentication.
+        ValueError: If `pivot_token` is empty, or if `dhis_token` is empty
+            and at least one element reaches the post step.
+        requests.HTTPError: If a request to the Pivot instance fails. A
+            rejected POST to PRIDE-C does not raise; it is logged and the
+            remaining elements are still imported.
+        requests.ConnectionError: If either instance cannot be reached.
     """
 
     if dryRun:
@@ -417,9 +441,11 @@ def fetch_pivot_csb_etlhub(
                 - text: the `check_import_value` summary string, returned whether or not the check passes
                 - flagged: True if `check_import_value` raised a ValueError
                 - error: the ValueError message if flagged, otherwise None
+
     Raises:
+        ValueError: If `pivot_token` is empty.
         requests.HTTPError: If a request to the Pivot instance fails.
-        ValueError: If `pivot_token` is empty, so no authentication is supplied.
+        requests.ConnectionError: If the Pivot instance cannot be reached.
     """
     logger.info("Fetching CSB cases for Ifanadiana")
 
